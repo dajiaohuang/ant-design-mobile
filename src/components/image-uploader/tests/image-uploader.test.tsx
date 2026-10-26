@@ -397,6 +397,103 @@ describe('ImageUploader', () => {
     expect(ref.current?.nativeElement).toBeDefined()
   })
 
+  test('delete removes only the clicked occurrence of the same item object', async () => {
+    const item = { url: 'same.png' }
+    const { container } = render(
+      <App defaultFileList={[item, item]} preview={false} />
+    )
+
+    fireEvent.click(
+      container.querySelectorAll(`.${classPrefix}-cell-delete`)[0]
+    )
+
+    await waitFor(() => {
+      expect(
+        container.querySelectorAll(`.${classPrefix}-cell-image`)
+      ).toHaveLength(1)
+    })
+    expect(container.querySelector('.adm-image-img')).toHaveAttribute(
+      'src',
+      'same.png'
+    )
+  })
+
+  test.each([
+    {
+      name: 'unique key',
+      initial: [
+        { key: 'A', url: 'a.png' },
+        { key: 'B', url: 'b.png' },
+      ],
+      replacement: [
+        { key: 'A', url: 'replacement.png' },
+        { key: 'B', url: 'b.png' },
+      ],
+      expected: ['b.png'],
+    },
+    {
+      name: 'duplicate key',
+      initial: [
+        { key: 'A', url: 'a.png' },
+        { key: 'B', url: 'b.png' },
+      ],
+      replacement: [
+        { key: 'A', url: 'replacement.png' },
+        { key: 'A', url: 'another.png' },
+        { key: 'B', url: 'b.png' },
+      ],
+      expected: ['replacement.png', 'another.png', 'b.png'],
+    },
+    {
+      name: 'missing key',
+      initial: [{ url: 'a.png' }, { key: 'B', url: 'b.png' }],
+      replacement: [{ url: 'replacement.png' }, { key: 'B', url: 'b.png' }],
+      expected: ['replacement.png', 'b.png'],
+    },
+  ])(
+    'async delete handles controlled $name replacement',
+    async ({ initial, replacement, expected }) => {
+      let resolveDelete!: (canDelete: boolean) => void
+      const deletePromise = new Promise<boolean>(resolve => {
+        resolveDelete = resolve
+      })
+      let replaceFileList!: (fileList: ImageUploadItem[]) => void
+
+      const ControlledApp = () => {
+        const [fileList, setFileList] = useState<ImageUploadItem[]>(initial)
+        replaceFileList = setFileList
+        return (
+          <ImageUploader
+            value={fileList}
+            onChange={setFileList}
+            preview={false}
+            onDelete={() => deletePromise}
+            upload={mockUpload}
+          />
+        )
+      }
+
+      const { container } = render(<ControlledApp />)
+      fireEvent.click(
+        container.querySelectorAll(`.${classPrefix}-cell-delete`)[0]
+      )
+
+      await act(async () => {
+        replaceFileList(replacement)
+      })
+
+      await act(async () => {
+        resolveDelete(true)
+        await deletePromise
+      })
+
+      const imageUrls = Array.from(
+        container.querySelectorAll<HTMLImageElement>('.adm-image-img')
+      ).map(image => image.getAttribute('src'))
+      expect(imageUrls).toEqual(expected)
+    }
+  )
+
   test('async delete preserves items uploaded while confirmation is pending', async () => {
     let resolveDelete!: (canDelete: boolean) => void
     const deletePromise = new Promise<boolean>(resolve => {
@@ -439,8 +536,9 @@ describe('ImageUploader', () => {
     })
 
     const getImageUrls = () =>
-      Array.from(container.querySelectorAll<HTMLImageElement>('.adm-image-img'))
-        .map(image => image.getAttribute('src'))
+      Array.from(
+        container.querySelectorAll<HTMLImageElement>('.adm-image-img')
+      ).map(image => image.getAttribute('src'))
     expect(getImageUrls()).toEqual(['a.png', 'b.png', 'c.png'])
 
     await act(async () => {
@@ -470,7 +568,9 @@ describe('ImageUploader', () => {
       />
     )
 
-    fireEvent.click(container.querySelectorAll(`.${classPrefix}-cell-delete`)[1])
+    fireEvent.click(
+      container.querySelectorAll(`.${classPrefix}-cell-delete`)[1]
+    )
     await act(async () => {
       resolveDelete(true)
       await deletePromise

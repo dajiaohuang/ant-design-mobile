@@ -273,6 +273,13 @@ export const ImageUploader = forwardRef<ImageUploaderRef, ImageUploaderProps>(
               const canDelete = await props.onDelete?.(fileItem)
               if (canDelete === false) return
               setValue(currentValue => {
+                const listUnchanged =
+                  currentValue.length === value.length &&
+                  currentValue.every((item, i) => item === value[i])
+                if (listUnchanged) {
+                  return currentValue.filter((_, i) => i !== index)
+                }
+
                 let currentIndex = -1
                 for (let i = 0; i < currentValue.length; i++) {
                   if (currentValue[i] === fileItem) {
